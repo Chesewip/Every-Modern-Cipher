@@ -8,6 +8,8 @@
  * Usage: php mcrypt_brute.php --ct <file> --wl <file> [options]
  */
 
+require_once __DIR__ . '/xxtea.php';
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -236,7 +238,9 @@ $STREAM_CIPHERS = [
     'enigma'  => 'enigma',
 ];
 
-$ALL_CIPHERS = array_merge($BLOCK_CIPHERS, $STREAM_CIPHERS);
+$XXTEA_CIPHERS = ['xxtea' => 'xxtea'];
+
+$ALL_CIPHERS = array_merge($BLOCK_CIPHERS, $STREAM_CIPHERS, $XXTEA_CIPHERS);
 
 $BLOCK_MODES = [
     'ecb'  => MCRYPT_MODE_ECB,
@@ -398,6 +402,22 @@ function get_iv_size($cipher_const, $mode_const) {
 }
 
 // ---------------------------------------------------------------------------
+// XXTEA key fitting
+// ---------------------------------------------------------------------------
+
+function fit_key_xxtea($key) {
+    // XXTEA key is 4 x uint32 = 16 bytes max.
+    // The library's fixk() zero-pads the uint32 array to 4 elements,
+    // so keys shorter than 16 bytes are effectively zero-padded.
+    // Truncate to 16 bytes if longer (matching str2long + fixk behavior).
+    $len = strlen($key);
+    if ($len > 16) {
+        return substr($key, 0, 16);
+    }
+    return $key;
+}
+
+// ---------------------------------------------------------------------------
 // OpenSSL key/IV fitting & decryption
 // ---------------------------------------------------------------------------
 
@@ -477,6 +497,9 @@ function list_ciphers() {
         $modes = implode(', ', array_keys($def['modes']));
         echo str_pad($name, 18) . str_pad('openssl', 10) . str_pad('block', 10) . str_pad($key_info, 25) . $block_info . "  [$modes]\n";
     }
+
+    // XXTEA
+    echo str_pad('xxtea', 18) . str_pad('xxtea', 10) . str_pad('block', 10) . str_pad('1-16 (variable)', 25) . "variable\n";
 }
 
 function list_modes() {
@@ -688,17 +711,21 @@ if ($opts['ivs'] && file_exists($opts['ivs'])) {
 // Resolve cipher & mode lists
 // ---------------------------------------------------------------------------
 
-// Resolve cipher lists (mcrypt + openssl)
+// Resolve cipher lists (mcrypt + openssl + xxtea)
 $mcrypt_cipher_list = [];
 $openssl_cipher_list = [];
+$xxtea_cipher_list = [];
 
 if ($opts['ciphers'] === 'all') {
-    $mcrypt_cipher_list = $ALL_CIPHERS;
+    $mcrypt_cipher_list = array_merge($BLOCK_CIPHERS, $STREAM_CIPHERS);
     $openssl_cipher_list = $OPENSSL_CIPHERS;
+    $xxtea_cipher_list = $XXTEA_CIPHERS;
 } else {
     foreach (explode(',', $opts['ciphers']) as $name) {
         $name = trim($name);
-        if (isset($ALL_CIPHERS[$name])) {
+        if (isset($XXTEA_CIPHERS[$name])) {
+            $xxtea_cipher_list[$name] = $XXTEA_CIPHERS[$name];
+        } elseif (isset($ALL_CIPHERS[$name])) {
             $mcrypt_cipher_list[$name] = $ALL_CIPHERS[$name];
         } elseif (isset($OPENSSL_CIPHERS[$name])) {
             $openssl_cipher_list[$name] = $OPENSSL_CIPHERS[$name];
@@ -708,13 +735,17 @@ if ($opts['ciphers'] === 'all') {
     }
 }
 
+$xxtea_mode_requested = false;
 if ($opts['modes'] === 'all') {
     $mode_list = $ALL_MODES;
+    $xxtea_mode_requested = true;
 } else {
     $mode_list = [];
     foreach (explode(',', $opts['modes']) as $name) {
         $name = trim($name);
-        if (isset($ALL_MODES[$name])) {
+        if ($name === 'xxtea') {
+            $xxtea_mode_requested = true;
+        } elseif (isset($ALL_MODES[$name])) {
             $mode_list[$name] = $ALL_MODES[$name];
         } else {
             echo "[WARN] Unknown mode '$name' — skipping\n";
@@ -764,6 +795,17 @@ foreach ($openssl_cipher_list as $c_name => $c_def) {
     }
 }
 
+// XXTEA combos (no modes — single combo per cipher)
+if ($xxtea_mode_requested) {
+    foreach ($xxtea_cipher_list as $c_name => $c_const) {
+        $combos[] = [
+            'engine' => 'xxtea',
+            'cipher' => $c_name,
+            'mode'   => 'xxtea',
+        ];
+    }
+}
+
 // Block-alignment pre-check: prune OpenSSL ECB/CBC combos where ciphertext
 // length isn't a multiple of block size (would always return false)
 $ct_check_len = strlen($ct_variants[0][1]);
@@ -788,11 +830,19 @@ if ($pruned > 0) {
 $combo_count = count($combos);
 $iv_count = count($ivs);
 $effective_keys = $key_count * $key_multiplier;
-$total = $variant_count * $combo_count * $effective_keys * $iv_count;
 
 $mcrypt_combos = count(array_filter($combos, function($c) { return $c['engine'] === 'mcrypt'; }));
-$openssl_combos = $combo_count - $mcrypt_combos;
-info("Testing $variant_count variants x $combo_count cipher+mode combos ($mcrypt_combos mcrypt + $openssl_combos openssl) x $effective_keys keys x $iv_count IVs = " . number_format($total) . " combos");
+$openssl_combos = count(array_filter($combos, function($c) { return $c['engine'] === 'openssl'; }));
+$xxtea_combos = count(array_filter($combos, function($c) { return $c['engine'] === 'xxtea'; }));
+// XXTEA has no IV, so each XXTEA combo counts as 1 attempt per key (not iv_count)
+$non_xxtea_combos = $mcrypt_combos + $openssl_combos;
+$total = $variant_count * ($non_xxtea_combos * $effective_keys * $iv_count + $xxtea_combos * $effective_keys);
+
+$engine_parts = [];
+if ($mcrypt_combos) $engine_parts[] = "$mcrypt_combos mcrypt";
+if ($openssl_combos) $engine_parts[] = "$openssl_combos openssl";
+if ($xxtea_combos) $engine_parts[] = "$xxtea_combos xxtea";
+info("Testing $variant_count variants x $combo_count cipher+mode combos (" . implode(' + ', $engine_parts) . ") x $effective_keys keys = " . number_format($total) . " combos");
 
 // ---------------------------------------------------------------------------
 // Brute force loop
@@ -857,11 +907,67 @@ foreach ($ct_variants as $variant) {
                 // Fit key per engine
                 if ($engine === 'mcrypt') {
                     $fitted_key = fit_key($candidate_key, $combo['c_const'], $combo['m_const']);
+                } elseif ($engine === 'xxtea') {
+                    $fitted_key = fit_key_xxtea($candidate_key);
                 } else {
                     $fitted_key = fit_key_openssl($candidate_key, $combo['cipher_def']);
                 }
                 if ($fitted_key === false) {
                     $tested += $iv_count;
+                    continue;
+                }
+
+                // XXTEA: no IV, single attempt per key
+                if ($engine === 'xxtea') {
+                    $tested++;
+                    $fitted_iv = '';
+
+                    $plaintext = @xxtea_decrypt($ciphertext, $fitted_key);
+
+                    if ($plaintext !== false && strlen($plaintext) > 0) {
+                        $score = score_printable($plaintext);
+
+                        if ($score >= $threshold) {
+                            $key_hex = bytes_to_hex($fitted_key);
+                            $iv_hex = '';
+                            $preview = safe_preview($plaintext);
+                            $key_ascii = safe_preview($candidate_key, 40);
+                            $key_note = $is_reversed ? ' (rev)' : '';
+
+                            $hit = [
+                                'score'     => round($score * 100, 2),
+                                'cipher'    => $c_name,
+                                'mode'      => $m_name,
+                                'variant'   => $v_label,
+                                'key_ascii' => $key_ascii . $key_note,
+                                'key_hex'   => $key_hex,
+                                'iv_hex'    => $iv_hex,
+                                'preview'   => $preview,
+                            ];
+
+                            echo sprintf("[HIT] score=%.2f cipher=%s mode=%s variant=%s key_hex=%s iv_hex=%s preview=\"%s\"\n",
+                                $hit['score'], $c_name, $m_name, $v_label, $key_hex, $iv_hex, $preview);
+                            flush();
+
+                            $results[] = $hit;
+
+                            usort($results, function($a, $b) {
+                                return $b['score'] <=> $a['score'];
+                            });
+                            if (count($results) > $top_n) {
+                                $results = array_slice($results, 0, $top_n);
+                            }
+                        }
+                    }
+
+                    // Emit progress periodically
+                    if ($total > 0) {
+                        $pct = $tested / $total;
+                        if ($pct - $last_progress >= 0.001 || $tested === $total) {
+                            emit_progress($pct);
+                            $last_progress = $pct;
+                        }
+                    }
                     continue;
                 }
 

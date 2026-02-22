@@ -90,8 +90,11 @@ STANDALONE_BLOCK_CIPHERS = [
 
 CRYPTOPP_CIPHERS = CRYPTOPP_BLOCK_CIPHERS + CRYPTOPP_STREAM_CIPHERS + GLADMAN_BLOCK_CIPHERS + BOTAN_BLOCK_CIPHERS + STANDALONE_BLOCK_CIPHERS
 
-ALL_CIPHERS = MCRYPT_CIPHERS + OPENSSL_CIPHERS + PYCRYPTO_CIPHERS + CRYPTOPP_CIPHERS
-PHP_CIPHERS = MCRYPT_CIPHERS + OPENSSL_CIPHERS  # handled by PHP backend
+# XXTEA (standalone library, routed via PHP backend)
+XXTEA_CIPHERS = ["xxtea"]
+
+ALL_CIPHERS = MCRYPT_CIPHERS + OPENSSL_CIPHERS + PYCRYPTO_CIPHERS + CRYPTOPP_CIPHERS + XXTEA_CIPHERS
+PHP_CIPHERS = MCRYPT_CIPHERS + OPENSSL_CIPHERS + XXTEA_CIPHERS  # handled by PHP backend
 
 BLOCK_MODES = ["ecb", "cbc", "cfb", "ofb", "nofb", "ncfb", "ctr"]
 STREAM_MODES = ["stream"]
@@ -793,6 +796,32 @@ class McryptBruteApp(ctk.CTk):
             )
             cb.grid(row=i // COLS, column=i % COLS, sticky="w", padx=4, pady=2)
 
+        # ── XXTEA group ──
+        xxtea_header = ctk.CTkFrame(cipher_inner, fg_color="transparent")
+        xxtea_header.pack(fill="x", pady=(8, 4))
+
+        ctk.CTkLabel(
+            xxtea_header, text="XXTEA",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=C["red"]
+        ).pack(side="left", padx=(0, 10))
+
+        xxtea_grid = ctk.CTkFrame(cipher_inner, fg_color="transparent")
+        xxtea_grid.pack(fill="x")
+
+        for i, name in enumerate(XXTEA_CIPHERS):
+            var = ctk.BooleanVar(value=(name in saved_ciphers))
+            self.cipher_vars[name] = var
+            cb = ctk.CTkCheckBox(
+                xxtea_grid, text=name, variable=var,
+                font=ctk.CTkFont(family="Consolas", size=11),
+                text_color=C["text"],
+                fg_color=C["red"], hover_color=C["red_d"],
+                border_color=C["border"],
+                width=160
+            )
+            cb.grid(row=i // COLS, column=i % COLS, sticky="w", padx=4, pady=2)
+
         # ── Panel: Mode Selection ────────────────────────────────────────
         self._section_label(main, "MODE SELECTION")
         mode_panel = ctk.CTkFrame(main, fg_color=C["surface"], corner_radius=8)
@@ -1136,6 +1165,11 @@ class McryptBruteApp(ctk.CTk):
             if name in self.cipher_vars:
                 self.cipher_vars[name].set(True)
 
+    def _select_all_xxtea(self):
+        for name in XXTEA_CIPHERS:
+            if name in self.cipher_vars:
+                self.cipher_vars[name].set(True)
+
     def _select_all_ciphers(self):
         for var in self.cipher_vars.values():
             var.set(True)
@@ -1387,19 +1421,23 @@ class McryptBruteApp(ctk.CTk):
             return
 
         selected_modes = [name for name, var in self.mode_vars.items() if var.get()]
-        if not selected_modes:
+        # XXTEA doesn't need standard modes; only require modes if non-XXTEA ciphers selected
+        non_xxtea_selected = [c for c in selected_ciphers if c not in XXTEA_CIPHERS]
+        if not selected_modes and non_xxtea_selected:
             self.append_log("[ERROR] Please select at least one mode.\n")
             return
 
         # Split ciphers by engine
-        php_ciphers = [c for c in selected_ciphers if c in PHP_CIPHERS]
+        php_ciphers = [c for c in selected_ciphers if c in PHP_CIPHERS and c not in XXTEA_CIPHERS]
+        xxtea_ciphers = [c for c in selected_ciphers if c in XXTEA_CIPHERS]
         py_ciphers = [c for c in selected_ciphers if c in PYCRYPTO_CIPHERS]
         cpp_ciphers = [c for c in selected_ciphers if c in CRYPTOPP_CIPHERS]
 
         # Warn about missing engines
-        if php_ciphers and not self.php_path:
-            self.append_log("[ERROR] php.exe not found — cannot run mcrypt/OpenSSL ciphers.\n")
+        if (php_ciphers or xxtea_ciphers) and not self.php_path:
+            self.append_log("[ERROR] php.exe not found — cannot run mcrypt/OpenSSL/XXTEA ciphers.\n")
             php_ciphers = []
+            xxtea_ciphers = []
         if php_ciphers and not self.has_mcrypt:
             self.append_log("[ERROR] mcrypt extension not loaded — cannot run mcrypt ciphers.\n")
             php_ciphers = []
@@ -1413,7 +1451,7 @@ class McryptBruteApp(ctk.CTk):
             self.append_log("[WARN] cryptopp_brute.exe not found — Crypto++ ciphers skipped.\n")
             cpp_ciphers = []
 
-        if not php_ciphers and not py_ciphers and not cpp_ciphers:
+        if not php_ciphers and not xxtea_ciphers and not py_ciphers and not cpp_ciphers:
             self.append_log("[ERROR] No runnable ciphers selected.\n")
             return
 
@@ -1448,6 +1486,13 @@ class McryptBruteApp(ctk.CTk):
             cmd += ["--modes", ",".join(standard_modes)]
             cmd += ["--ciphers", ",".join(php_ciphers)]
             self._job_queue.append(("mcrypt + OpenSSL", cmd))
+        if xxtea_ciphers:
+            # XXTEA is mode-independent — pass --modes xxtea (pseudo-mode)
+            script = os.path.join(get_app_dir(), "mcrypt_brute.php")
+            cmd = [self.php_path, script] + common_args
+            cmd += ["--modes", "xxtea"]
+            cmd += ["--ciphers", ",".join(xxtea_ciphers)]
+            self._job_queue.append(("XXTEA", cmd))
         if py_ciphers and standard_modes:
             script = os.path.join(get_app_dir(), "pycrypto_brute.py")
             cmd = [self.python_path, script] + common_args
