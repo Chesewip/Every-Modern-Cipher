@@ -376,6 +376,67 @@ function fit_key($key, $cipher_const, $mode_const) {
     return $key;
 }
 
+function fit_key_to_size($key, $target_size) {
+    $key_len = strlen($key);
+    if ($key_len < $target_size) {
+        return $key . str_repeat("\0", $target_size - $key_len);
+    } elseif ($key_len > $target_size) {
+        return substr($key, 0, $target_size);
+    }
+    return $key;
+}
+
+function repeat_key_to_size($key, $target_size) {
+    $key_len = strlen($key);
+    if ($key_len === 0) return str_repeat("\0", $target_size);
+    if ($key_len >= $target_size) return substr($key, 0, $target_size);
+    // Repeat cyclically: "Zombies" -> "ZombiesZombiesZo" for 16 bytes
+    $repeated = str_repeat($key, (int)ceil($target_size / $key_len));
+    return substr($repeated, 0, $target_size);
+}
+
+function get_all_fitted_keys($key, $cipher_const, $mode_const, $all_sizes, $repeat_key) {
+    $results = [];
+
+    if (!$all_sizes) {
+        $fitted = fit_key($key, $cipher_const, $mode_const);
+        if ($fitted === false) return [];
+        $results[] = $fitted;
+
+        // Add repeated variant if key was padded and repeat_key is on
+        if ($repeat_key && strlen($key) < strlen($fitted)) {
+            $rep = repeat_key_to_size($key, strlen($fitted));
+            if ($rep !== $fitted) $results[] = $rep;
+        }
+        return $results;
+    }
+
+    $sizes = @mcrypt_module_get_supported_key_sizes($cipher_const);
+
+    if (empty($sizes) || count($sizes) <= 1) {
+        $fitted = fit_key($key, $cipher_const, $mode_const);
+        if ($fitted === false) return [];
+        $results[] = $fitted;
+
+        if ($repeat_key && strlen($key) < strlen($fitted)) {
+            $rep = repeat_key_to_size($key, strlen($fitted));
+            if ($rep !== $fitted) $results[] = $rep;
+        }
+        return $results;
+    }
+
+    // Multiple fixed sizes — return one fitted key per valid size
+    sort($sizes);
+    foreach ($sizes as $s) {
+        $results[] = fit_key_to_size($key, $s);
+        if ($repeat_key && strlen($key) < $s) {
+            $rep = repeat_key_to_size($key, $s);
+            if ($rep !== fit_key_to_size($key, $s)) $results[] = $rep;
+        }
+    }
+    return $results;
+}
+
 function fit_iv($iv, $cipher_const, $mode_const) {
     $td = @mcrypt_module_open($cipher_const, '', $mode_const, '');
     if ($td === false) return false;
@@ -532,6 +593,8 @@ function parse_args($argv) {
         'caesar'       => false,
         'char_shift'   => false,
         'reverse_key'  => false,
+        'all_key_sizes' => false,
+        'repeat_key'   => false,
     ];
 
     $i = 1;
@@ -585,6 +648,12 @@ function parse_args($argv) {
                 break;
             case '--reverse-key':
                 $opts['reverse_key'] = true;
+                break;
+            case '--all-key-sizes':
+                $opts['all_key_sizes'] = true;
+                break;
+            case '--repeat-key':
+                $opts['repeat_key'] = true;
                 break;
             default:
                 echo "[ERROR] Unknown argument: $arg\n";
@@ -834,15 +903,32 @@ $effective_keys = $key_count * $key_multiplier;
 $mcrypt_combos = count(array_filter($combos, function($c) { return $c['engine'] === 'mcrypt'; }));
 $openssl_combos = count(array_filter($combos, function($c) { return $c['engine'] === 'openssl'; }));
 $xxtea_combos = count(array_filter($combos, function($c) { return $c['engine'] === 'xxtea'; }));
-// XXTEA has no IV, so each XXTEA combo counts as 1 attempt per key (not iv_count)
-$non_xxtea_combos = $mcrypt_combos + $openssl_combos;
-$total = $variant_count * ($non_xxtea_combos * $effective_keys * $iv_count + $xxtea_combos * $effective_keys);
+
+// Compute total accounting for --all-key-sizes, --repeat-key multipliers and XXTEA (no IV)
+$repeat_mult = $opts['repeat_key'] ? 2 : 1;
+$total = 0;
+foreach ($combos as $combo) {
+    if ($combo['engine'] === 'xxtea') {
+        $total += $effective_keys; // no IV, no key-size variance
+    } elseif ($combo['engine'] === 'mcrypt') {
+        $ks_mult = 1;
+        if ($opts['all_key_sizes']) {
+            $sizes = @mcrypt_module_get_supported_key_sizes($combo['c_const']);
+            if (!empty($sizes) && count($sizes) > 1) $ks_mult = count($sizes);
+        }
+        $total += $effective_keys * $iv_count * $ks_mult * $repeat_mult;
+    } else {
+        $total += $effective_keys * $iv_count * $repeat_mult;
+    }
+}
+$total *= $variant_count;
 
 $engine_parts = [];
 if ($mcrypt_combos) $engine_parts[] = "$mcrypt_combos mcrypt";
 if ($openssl_combos) $engine_parts[] = "$openssl_combos openssl";
 if ($xxtea_combos) $engine_parts[] = "$xxtea_combos xxtea";
-info("Testing $variant_count variants x $combo_count cipher+mode combos (" . implode(' + ', $engine_parts) . ") x $effective_keys keys = " . number_format($total) . " combos");
+$aks_note = $opts['all_key_sizes'] ? " (all key sizes)" : "";
+info("Testing $variant_count variants x $combo_count cipher+mode combos (" . implode(' + ', $engine_parts) . ") x $effective_keys keys$aks_note = " . number_format($total) . " combos");
 
 // ---------------------------------------------------------------------------
 // Brute force loop
@@ -904,18 +990,21 @@ foreach ($ct_variants as $variant) {
             foreach ($key_candidates as $kc) {
                 list($candidate_key, $is_reversed) = $kc;
 
-                // Fit key per engine
+                // Fit key per engine — mcrypt may return multiple sizes
                 if ($engine === 'mcrypt') {
-                    $fitted_key = fit_key($candidate_key, $combo['c_const'], $combo['m_const']);
+                    $fitted_keys = get_all_fitted_keys($candidate_key, $combo['c_const'], $combo['m_const'], $opts['all_key_sizes'], $opts['repeat_key']);
                 } elseif ($engine === 'xxtea') {
-                    $fitted_key = fit_key_xxtea($candidate_key);
+                    $fitted_keys = [fit_key_xxtea($candidate_key)];
                 } else {
-                    $fitted_key = fit_key_openssl($candidate_key, $combo['cipher_def']);
+                    $fk = fit_key_openssl($candidate_key, $combo['cipher_def']);
+                    $fitted_keys = ($fk === false) ? [] : [$fk];
                 }
-                if ($fitted_key === false) {
+                if (empty($fitted_keys)) {
                     $tested += $iv_count;
                     continue;
                 }
+
+                foreach ($fitted_keys as $fitted_key) {
 
                 // XXTEA: no IV, single attempt per key
                 if ($engine === 'xxtea') {
@@ -1049,6 +1138,7 @@ foreach ($ct_variants as $variant) {
                         }
                     }
                 }
+                } // end foreach $fitted_keys
             }
         }
 

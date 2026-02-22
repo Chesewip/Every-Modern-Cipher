@@ -32,6 +32,45 @@ https://github.com/t-d-k/LibreCrypt/tree/master/src/3rd_party/AES_candidates_1st
 ### XXTEA (String version available circa mid 2000s)
 https://pecl.php.net/package/xxtea
 
+---
+
+# Options
+
+The GUI exposes several options that multiply the number of decryption attempts by testing transformed variants of the ciphertext, key, or IV. These are found in the **OPTIONS** and **IV SOURCE** panels.
+
+## Ciphertext Variant Options
+
+These transform the raw ciphertext before decryption, in case the ciphertext was encoded with an extra layer of obfuscation.
+
+| Option | What it does |
+|--------|-------------|
+| **Test reversed** | Reverses the encoded ciphertext string before decoding. Catches cases where the ciphertext was stored backwards. |
+| **Test Caesar rotations** | Applies every possible Caesar-style rotation to the encoded ciphertext characters (1–15 for hex, 1–63 for base64). Each shifted string is decoded separately and tested. |
+| **Test char shifts** | Performs cyclic character-level shifts on the encoded string — slides the string left by 1, 2, 3… positions (wrapping around). Catches ciphertexts where leading bytes were moved to the end. Applied on top of the original and any Caesar/reversed variants, so this can multiply the combo count significantly. |
+
+## Key Variant Options
+
+These modify how the wordlist key is prepared before being passed to the cipher.
+
+| Option | What it does |
+|--------|-------------|
+| **Test reversed keys** | Also tests each key spelled backwards (e.g. "Zombies" → "seibmoZ"). |
+| **Test all key sizes** | For ciphers that accept multiple fixed key sizes (e.g. Rijndael-128 accepts 16, 24, and 32 bytes), tests the key zero-padded to every valid size instead of just the smallest. Has no effect on variable-size ciphers (Blowfish, RC2, etc.) or single-size ciphers (DES, SM4, etc.). |
+| **Test repeated key** | In addition to the default zero-padded key, also tests a cyclically-repeated key. For example, "Zombies" (7 bytes) padded to 16 bytes becomes `ZombiesZombiesZo` instead of `Zombies\x00\x00…`. Useful when the encrypting tool filled the key buffer by repeating rather than null-padding. |
+
+## IV Source Options
+
+Controls which initialization vector(s) are used for decryption. The IV is automatically truncated or padded to match each cipher's required IV size.
+
+| Option | What it does |
+|--------|-------------|
+| **All-zeros (default)** | Uses a null IV — all `0x00` bytes. This is the default for most simple encryption tools. |
+| **All ASCII '0' (0x30)** | Uses an IV filled with the ASCII character `'0'` (`0x30` bytes). Some tools confuse "zero IV" with ASCII zeros instead of true null bytes. |
+| **Single IV (hex)** | Tests a single IV entered as a hex string (e.g. `DEADBEEF01020304`). |
+| **IV list file** | Loads multiple IVs from a file (one hex-encoded IV per line) and tests every key against every IV. |
+
+---
+
 # Supported Ciphers & Modes
 
 Supports **77 ciphers** across 4 engines and **24 modes** of operation.

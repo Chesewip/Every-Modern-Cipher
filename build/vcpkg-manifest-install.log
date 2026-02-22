@@ -24,4 +24,4 @@ cryptopp provides pkg-config modules:
   # Crypto++ cryptographic library (built with CMake)
   cryptopp
 
-All requested installations completed successfully in: 783 us
+All requested installations completed successfully in: 751 us

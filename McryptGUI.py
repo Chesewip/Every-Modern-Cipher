@@ -434,6 +434,18 @@ class McryptBruteApp(ctk.CTk):
             command=self._on_iv_mode_change
         ).pack(side="left")
 
+        # All ASCII '0' (0x30)
+        ascii_zeros_row = ctk.CTkFrame(iv_inner, fg_color="transparent")
+        ascii_zeros_row.pack(fill="x", pady=(0, 4))
+        ctk.CTkRadioButton(
+            ascii_zeros_row, text="All ASCII '0' (0x30)",
+            variable=self.iv_mode, value="ascii_zeros",
+            font=ctk.CTkFont(size=13), text_color=C["text"],
+            fg_color=C["accent"], hover_color=C["accent_h"],
+            border_color=C["border"],
+            command=self._on_iv_mode_change
+        ).pack(side="left")
+
         # Single IV
         single_iv_row = ctk.CTkFrame(iv_inner, fg_color="transparent")
         single_iv_row.pack(fill="x", pady=(4, 4))
@@ -949,6 +961,22 @@ class McryptBruteApp(ctk.CTk):
             border_color=C["border"]
         ).pack(side="left", padx=(0, 16))
 
+        self.all_key_sizes_var = ctk.BooleanVar(value=cfg.get("all_key_sizes", False))
+        ctk.CTkCheckBox(
+            variant_row, text="Test all key sizes", variable=self.all_key_sizes_var,
+            font=ctk.CTkFont(size=12), text_color=C["text"],
+            fg_color=C["accent"], hover_color=C["accent_h"],
+            border_color=C["border"]
+        ).pack(side="left", padx=(0, 16))
+
+        self.repeat_key_var = ctk.BooleanVar(value=cfg.get("repeat_key", False))
+        ctk.CTkCheckBox(
+            variant_row, text="Test repeated key", variable=self.repeat_key_var,
+            font=ctk.CTkFont(size=12), text_color=C["text"],
+            fg_color=C["accent"], hover_color=C["accent_h"],
+            border_color=C["border"]
+        ).pack(side="left", padx=(0, 16))
+
         ctk.CTkLabel(
             variant_row,
             text="hex: 15 shifts (0-9a-f)  base64: 63 shifts (A-Za-z0-9+/)",
@@ -1382,6 +1410,15 @@ class McryptBruteApp(ctk.CTk):
         mode = self.iv_mode.get()
         if mode == "zeros":
             return None  # PHP script uses all-zeros by default
+        elif mode == "ascii_zeros":
+            # 0x30 = ASCII '0', 32 bytes worth (oversized, backends truncate to fit)
+            import tempfile
+            tmp_dir = os.path.join(tempfile.gettempdir(), "mcrypt_brute_tmp")
+            os.makedirs(tmp_dir, exist_ok=True)
+            path = os.path.join(tmp_dir, "_ascii_zeros_iv.txt")
+            with open(path, "w") as f:
+                f.write("30" * 32 + "\n")  # 32 bytes of 0x30 in hex
+            return path
         elif mode == "single":
             iv_hex = self.single_iv_var.get().strip()
             if not iv_hex:
@@ -1474,6 +1511,10 @@ class McryptBruteApp(ctk.CTk):
             common_args += ["--char-shift"]
         if self.reverse_key_var.get():
             common_args += ["--reverse-key"]
+        if self.all_key_sizes_var.get():
+            common_args += ["--all-key-sizes"]
+        if self.repeat_key_var.get():
+            common_args += ["--repeat-key"]
         iv_path = self._resolve_iv_path()
         if iv_path:
             common_args += ["--ivs", iv_path]
@@ -1529,6 +1570,8 @@ class McryptBruteApp(ctk.CTk):
             "caesar": self.caesar_var.get(),
             "char_shift": self.char_shift_var.get(),
             "reverse_key": self.reverse_key_var.get(),
+            "all_key_sizes": self.all_key_sizes_var.get(),
+            "repeat_key": self.repeat_key_var.get(),
         })
 
         # UI state

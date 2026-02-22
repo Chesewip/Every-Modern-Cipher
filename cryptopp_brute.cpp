@@ -472,6 +472,68 @@ static std::string fit_key(const std::string& key, const CipherSpec& spec) {
     }
 }
 
+static std::string fit_key_to_size(const std::string& key, size_t target) {
+    size_t kl = key.size();
+    if (kl < target) {
+        std::string padded = key;
+        padded.resize(target, '\0');
+        return padded;
+    } else if (kl > target) {
+        return key.substr(0, target);
+    }
+    return key;
+}
+
+static std::string repeat_key_to_size(const std::string& key, size_t target) {
+    if (key.empty()) {
+        return std::string(target, '\0');
+    }
+    if (key.size() >= target) {
+        return key.substr(0, target);
+    }
+    std::string result;
+    result.reserve(target);
+    while (result.size() < target) {
+        result += key;
+    }
+    result.resize(target);
+    return result;
+}
+
+static void add_repeat_variants(std::vector<std::string>& results,
+                                 const std::string& key, bool do_repeat) {
+    if (!do_repeat) return;
+    size_t n = results.size();
+    for (size_t i = 0; i < n; i++) {
+        if (key.size() < results[i].size()) {
+            std::string rep = repeat_key_to_size(key, results[i].size());
+            if (rep != results[i]) {
+                results.push_back(rep);
+            }
+        }
+    }
+}
+
+static std::vector<std::string> get_all_fitted_keys(const std::string& key,
+                                                     const CipherSpec& spec,
+                                                     bool all_sizes,
+                                                     bool do_repeat) {
+    std::vector<std::string> result;
+    if (!all_sizes || spec.valid_key_sizes.empty() || spec.valid_key_sizes.size() <= 1) {
+        result.push_back(fit_key(key, spec));
+        add_repeat_variants(result, key, do_repeat);
+        return result;
+    }
+    // Multiple fixed sizes — return one fitted key per valid size
+    auto sizes = spec.valid_key_sizes;
+    std::sort(sizes.begin(), sizes.end());
+    for (size_t s : sizes) {
+        result.push_back(fit_key_to_size(key, s));
+    }
+    add_repeat_variants(result, key, do_repeat);
+    return result;
+}
+
 static std::string fit_iv(const std::string& iv, size_t required) {
     if (required == 0) return "";
     size_t ivl = iv.size();
@@ -781,6 +843,8 @@ struct Options {
     bool do_caesar = false;
     bool do_char_shift = false;
     bool reverse_key = false;
+    bool all_key_sizes = false;
+    bool repeat_key = false;
 };
 
 static Options parse_args(int argc, char* argv[]) {
@@ -819,6 +883,10 @@ static Options parse_args(int argc, char* argv[]) {
             opts.do_char_shift = true;
         } else if (arg == "--reverse-key") {
             opts.reverse_key = true;
+        } else if (arg == "--all-key-sizes") {
+            opts.all_key_sizes = true;
+        } else if (arg == "--repeat-key") {
+            opts.repeat_key = true;
         } else {
             std::cerr << "[ERROR] Unknown argument: " << arg << std::endl;
             std::exit(1);
@@ -931,6 +999,8 @@ int main(int argc, char* argv[]) {
                   << "  --caesar                 Test Caesar rotations\n"
                   << "  --char-shift             Test cyclic char shifts\n"
                   << "  --reverse-key            Test reversed keys\n"
+                  << "  --all-key-sizes          Test all valid key sizes per cipher\n"
+                  << "  --repeat-key             Test repeated key padding (cyclic fill)\n"
                   << "  --list-ciphers           List supported ciphers and exit\n"
                   << "  --list-modes             List supported modes and exit\n";
         return 1;
@@ -1097,7 +1167,15 @@ int main(int argc, char* argv[]) {
     size_t combo_count = combos.size();
     size_t iv_count = ivs.size();
     size_t effective_keys = key_count * key_multiplier;
-    uint64_t total = (uint64_t)variant_count * combo_count * effective_keys * iv_count;
+    uint64_t total = 0;
+    for (auto& combo : combos) {
+        size_t ks_mult = 1;
+        if (opts.all_key_sizes && !combo.spec->valid_key_sizes.empty()
+            && combo.spec->valid_key_sizes.size() > 1) {
+            ks_mult = combo.spec->valid_key_sizes.size();
+        }
+        total += (uint64_t)variant_count * effective_keys * iv_count * ks_mult;
+    }
 
     {
         // Format total with commas
@@ -1179,8 +1257,9 @@ int main(int argc, char* argv[]) {
                 }
 
                 for (auto& kc : key_candidates) {
-                    std::string fitted_key = fit_key(kc.key, *cs);
+                    auto fitted_keys = get_all_fitted_keys(kc.key, *cs, opts.all_key_sizes, opts.repeat_key);
 
+                    for (auto& fitted_key : fitted_keys) {
                     for (auto& raw_iv : ivs) {
                         tested++;
 
@@ -1238,6 +1317,7 @@ int main(int argc, char* argv[]) {
                             }
                         }
                     }
+                    } // end for fitted_keys
                 }
             }
         }

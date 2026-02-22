@@ -281,6 +281,62 @@ def fit_key_stream(key, cipher_def):
             return key[:target]
         return key
 
+def _fit_key_to_size(key, target):
+    """Pad or truncate key to exact target size."""
+    kl = len(key)
+    if kl < target:
+        return key + b'\x00' * (target - kl)
+    elif kl > target:
+        return key[:target]
+    return key
+
+
+def _repeat_key_to_size(key, target):
+    """Repeat key cyclically to fill target size."""
+    kl = len(key)
+    if kl == 0:
+        return b'\x00' * target
+    if kl >= target:
+        return key[:target]
+    repeats = (target + kl - 1) // kl
+    return (key * repeats)[:target]
+
+
+def _add_repeat_variants(results, key, repeat_key):
+    """If repeat_key is on and key was padded, add repeated variant."""
+    if not repeat_key:
+        return results
+    out = []
+    for fitted in results:
+        out.append(fitted)
+        if len(key) < len(fitted):
+            rep = _repeat_key_to_size(key, len(fitted))
+            if rep != fitted:
+                out.append(rep)
+    return out
+
+
+def get_all_fitted_keys(key, cipher_def, is_stream, all_sizes, repeat_key):
+    """Return list of fitted keys. Multiple entries when all_sizes=True and cipher has multiple fixed sizes."""
+    if not all_sizes:
+        if is_stream:
+            results = [fit_key_stream(key, cipher_def)]
+        else:
+            results = [fit_key_block(key, cipher_def)]
+        return _add_repeat_variants(results, key, repeat_key)
+
+    if is_stream:
+        key_sizes = cipher_def.get('key_sizes')
+        if key_sizes is not None and len(key_sizes) > 1:
+            results = [_fit_key_to_size(key, s) for s in sorted(key_sizes)]
+        else:
+            results = [fit_key_stream(key, cipher_def)]
+        return _add_repeat_variants(results, key, repeat_key)
+    else:
+        results = [fit_key_block(key, cipher_def)]
+        return _add_repeat_variants(results, key, repeat_key)
+
+
 def fit_iv_block(iv, block_size, mode):
     """Fit IV to required size for block cipher mode."""
     if mode == 'ecb':
@@ -419,6 +475,8 @@ def parse_args():
     parser.add_argument('--caesar', action='store_true')
     parser.add_argument('--char-shift', action='store_true')
     parser.add_argument('--reverse-key', action='store_true')
+    parser.add_argument('--all-key-sizes', action='store_true')
+    parser.add_argument('--repeat-key', action='store_true')
 
     return parser.parse_args()
 
@@ -605,68 +663,68 @@ def main():
                             key_candidates.append((rev_key, True))
 
                     for candidate_key, is_reversed in key_candidates:
-                        # Fit key
-                        if is_stream:
-                            fitted_key = fit_key_stream(candidate_key, c_def)
-                        else:
-                            fitted_key = fit_key_block(candidate_key, c_def)
+                        # Fit key — may return multiple sizes with --all-key-sizes
+                        fitted_keys = get_all_fitted_keys(
+                            candidate_key, c_def, is_stream,
+                            args.all_key_sizes, args.repeat_key)
 
-                        for raw_iv in ivs:
-                            tested += 1
+                        for fitted_key in fitted_keys:
+                            for raw_iv in ivs:
+                                tested += 1
 
-                            # Decrypt
-                            if is_stream:
-                                fitted_iv = fit_iv_stream(raw_iv, c_def)
-                                plaintext = try_decrypt_stream(
-                                    ciphertext, c_def, fitted_key, fitted_iv)
-                            else:
-                                fitted_iv = fit_iv_block(
-                                    raw_iv, c_def['block_size'], m_name)
-                                plaintext = try_decrypt_block(
-                                    ciphertext, c_def, m_name,
-                                    fitted_key, fitted_iv)
+                                # Decrypt
+                                if is_stream:
+                                    fitted_iv = fit_iv_stream(raw_iv, c_def)
+                                    plaintext = try_decrypt_stream(
+                                        ciphertext, c_def, fitted_key, fitted_iv)
+                                else:
+                                    fitted_iv = fit_iv_block(
+                                        raw_iv, c_def['block_size'], m_name)
+                                    plaintext = try_decrypt_block(
+                                        ciphertext, c_def, m_name,
+                                        fitted_key, fitted_iv)
 
-                            if plaintext is None or len(plaintext) == 0:
-                                continue
+                                if plaintext is None or len(plaintext) == 0:
+                                    continue
 
-                            score = score_printable(plaintext)
+                                score = score_printable(plaintext)
 
-                            if score >= threshold:
-                                key_hex = bytes_to_hex(fitted_key)
-                                iv_hex = bytes_to_hex(fitted_iv)
-                                preview = safe_preview(plaintext)
-                                key_ascii = safe_preview(candidate_key, 40)
-                                key_note = ' (rev)' if is_reversed else ''
+                                if score >= threshold:
+                                    key_hex = bytes_to_hex(fitted_key)
+                                    iv_hex = bytes_to_hex(fitted_iv)
+                                    preview = safe_preview(plaintext)
+                                    key_ascii = safe_preview(candidate_key, 40)
+                                    key_note = ' (rev)' if is_reversed else ''
 
-                                hit = {
-                                    'score': round(score * 100, 2),
-                                    'cipher': c_name,
-                                    'mode': m_name,
-                                    'variant': v_label,
-                                    'key_ascii': key_ascii + key_note,
-                                    'key_hex': key_hex,
-                                    'iv_hex': iv_hex,
-                                    'preview': preview,
-                                }
+                                    hit = {
+                                        'score': round(score * 100, 2),
+                                        'cipher': c_name,
+                                        'mode': m_name,
+                                        'variant': v_label,
+                                        'key_ascii': key_ascii + key_note,
+                                        'key_hex': key_hex,
+                                        'iv_hex': iv_hex,
+                                        'preview': preview,
+                                    }
 
-                                print(f'[HIT] score={hit["score"]:.2f} '
-                                      f'cipher={c_name} mode={m_name} '
-                                      f'variant={v_label} key_hex={key_hex} '
-                                      f'iv_hex={iv_hex} preview="{preview}"',
-                                      flush=True)
+                                    print(f'[HIT] score={hit["score"]:.2f} '
+                                          f'cipher={c_name} mode={m_name} '
+                                          f'variant={v_label} key_hex={key_hex} '
+                                          f'iv_hex={iv_hex} preview="{preview}"',
+                                          flush=True)
 
-                                results.append(hit)
-                                results.sort(key=lambda x: x['score'],
-                                             reverse=True)
-                                if len(results) > top_n:
-                                    results = results[:top_n]
+                                    results.append(hit)
+                                    results.sort(key=lambda x: x['score'],
+                                                 reverse=True)
+                                    if len(results) > top_n:
+                                        results = results[:top_n]
 
-                            # Progress
-                            if total > 0:
-                                pct = tested / total
-                                if pct - last_progress >= 0.001 or tested == total:
-                                    emit_progress(pct)
-                                    last_progress = pct
+                                # Progress
+                                if total > 0:
+                                    pct = tested / total
+                                    if pct - last_progress >= 0.001 or tested == total:
+                                        emit_progress(pct)
+                                        last_progress = pct
 
     elapsed = round(time.time() - start_time, 2)
 
