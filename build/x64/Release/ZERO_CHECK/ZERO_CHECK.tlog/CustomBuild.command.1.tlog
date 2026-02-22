@@ -1,0 +1,10 @@
+^C:\USERS\10850K\DESKTOP\CODE PROJECTS\CIPHER TOOLS\MCRYPT\BUILD\CMAKEFILES\95B7892CBEFAA0214874B37F34F9D06B\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/10850K/Desktop/CODE PROJECTS/CIPHER TOOLS/MCRYPT" "-BC:/Users/10850K/Desktop/CODE PROJECTS/CIPHER TOOLS/MCRYPT/build" --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file "C:/Users/10850K/Desktop/CODE PROJECTS/CIPHER TOOLS/MCRYPT/build/cryptopp_brute.sln"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

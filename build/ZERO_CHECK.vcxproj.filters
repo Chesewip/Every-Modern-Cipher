@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\build\CMakeFiles\95b7892cbefaa0214874b37f34f9d06b\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{AD4878AC-D860-3E56-9F12-7F46EF98B809}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

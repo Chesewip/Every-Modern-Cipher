@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\cryptopp_brute.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\gladman_ciphers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\gladman_wrap_crypton.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\gladman_wrap_dfc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\gladman_wrap_e2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\gladman_wrap_frog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\gladman_wrap_magenta.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\gladman_wrap_hpc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\botan_ciphers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\standalone_ciphers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\standalone_wrap_clefia.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\standalone_wrap_anubis.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\standalone_wrap_khazad.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\standalone_wrap_kuznyechik.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\10850K\Desktop\CODE PROJECTS\CIPHER TOOLS\MCRYPT\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{9AEA6BBB-7C0A-372B-A3AC-3F832A46C527}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

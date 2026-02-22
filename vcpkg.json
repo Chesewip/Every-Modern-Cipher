@@ -1,0 +1,16 @@
+{
+  "name": "mcrypt-brute",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "cryptopp",
+    "botan"
+  ],
+  "overrides": [
+    {
+      "name": "botan",
+      "version": "2.19.3",
+      "port-version": 2
+    }
+  ],
+  "builtin-baseline": "dd930e314f529c86d2703a60d5ea7dd6573d9e5a"
+}

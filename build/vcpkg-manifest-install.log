@@ -1,0 +1,27 @@
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.35.32215/bin/Hostx64/x64/cl.exe
+Detecting compiler hash for triplet x64-windows-static...
+Compiler found: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.35.32215/bin/Hostx64/x64/cl.exe
+The following packages are already installed:
+    botan:x64-windows-static@2.19.3#2
+    cryptopp:x64-windows-static@2025-12-01
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2024-05-23
+  * vcpkg-cmake-get-vars:x64-windows@2025-05-29
+botan provides pkg-config modules:
+
+  # Crypto and TLS for C++11
+  botan-2
+
+cryptopp provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(cryptopp CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE cryptopp::cryptopp)
+
+cryptopp provides pkg-config modules:
+
+  # Crypto++ cryptographic library (built with CMake)
+  cryptopp
+
+All requested installations completed successfully in: 783 us
