@@ -29,9 +29,12 @@ https://github.com/torvalds/linux/tree/master/crypto
 ### Gladman (AES 1st round candidates)
 https://github.com/t-d-k/LibreCrypt/tree/master/src/3rd_party/AES_candidates_1st_round_-_Gladman
 
+### XXTEA (String version available circa mid 2000s)
+https://pecl.php.net/package/xxtea
+
 # Supported Ciphers & Modes
 
-MCRYPT supports **77 ciphers** across 4 engines and **24 modes** of operation.
+Supports **77 ciphers** across 4 engines and **24 modes** of operation.
 
 ---
 
