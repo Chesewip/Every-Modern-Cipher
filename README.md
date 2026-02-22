@@ -2,8 +2,10 @@
 
 This is a tool that tries to implement as many modern ciphers available for easy testing of decryption. This has been built for the COD Black ops 3 remaining ciphers after the discovery mcrypt was specifically used for a lot of them. 
 
-FULL DISCLAIMER : All of this has been vibe coded, however the implementations of the ciphers them selves are directly pulled from various crypto libs, not the AI.
-The app it selfs just acts as a python wrapper, calling several different backends. The orignal implementions can be found from the following repos / locations
+### FULL DISCLAIMER : 
+All of this has been vibe coded, however the implementations of the ciphers them selves are directly pulled from various crypto libs, not the AI.
+The app it selfs just acts as a python wrapper, calling several different backends. The orignal implementions can be found from the following repos / locations.
+With that said, please be critical of any of the implementations, and feel free to do testing to make sure your test ciphers can be decoded. Some of the rarer algorithms can be a little difficult to test.
 
 ## CryptoPP
 https://github.com/weidai11/cryptopp
