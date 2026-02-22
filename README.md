@@ -7,26 +7,26 @@ All of this has been vibe coded, however the implementations of the ciphers them
 The app it selfs just acts as a python wrapper, calling several different backends. The orignal implementions can be found from the following repos / locations.
 With that said, please be critical of any of the implementations, and feel free to do testing to make sure your test ciphers can be decoded. Some of the rarer algorithms can be a little difficult to test.
 
-## CryptoPP
+### CryptoPP
 https://github.com/weidai11/cryptopp
 
-## PyCryptodome
+### PyCryptodome
 https://github.com/Legrandin/pycryptodome
 
-## MCrypt
+### MCrypt
 https://github.com/winlibs/libmcrypt
 https://github.com/php/pecl-encryption-mcrypt
 
-## OpenSSL
+### OpenSSL
 https://github.com/openssl/openssl/tree/master/crypto
 
-## Botan 
+### Botan 
 https://github.com/randombit/botan
 
-## Linux
+### Linux
 https://github.com/torvalds/linux/tree/master/crypto
 
-## Gladman (AES 1st round candidates)
+### Gladman (AES 1st round candidates)
 https://github.com/t-d-k/LibreCrypt/tree/master/src/3rd_party/AES_candidates_1st_round_-_Gladman
 
 # Supported Ciphers & Modes
