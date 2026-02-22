@@ -6,6 +6,9 @@ The app it selfs just acts as a python wrapper, calling several different backen
 CryptoPP
 https://github.com/weidai11/cryptopp
 
+PyCryptodome
+https://github.com/Legrandin/pycryptodome
+
 MCrypt
 https://github.com/winlibs/libmcrypt
 https://github.com/php/pecl-encryption-mcrypt
